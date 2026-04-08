@@ -6,13 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 
-	"boot.dev/linko/internal/store"
 	"golang.org/x/crypto/bcrypt"
+
+	"boot.dev/linko/internal/store"
 )
 
 const shortURLLen = len("http://localhost:8080/") + 6
@@ -45,13 +47,17 @@ func (s *server) handlerShortenLink(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing url parameter", http.StatusBadRequest)
 		return
 	}
-	fmt.Println("Shortening URL:", longURL)
+	log.Println("Shortening URL:", longURL)
 	u, err := url.Parse(longURL)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		http.Error(w, "invalid URL: must include scheme (http/https) and host", http.StatusBadRequest)
+		http.Error(
+			w,
+			"invalid URL: must include scheme (http/https) and host",
+			http.StatusBadRequest,
+		)
 		return
 	}
-	fmt.Printf("Parsed URL: scheme=%s, host=%s\n", u.Scheme, u.Host)
+	log.Printf("Parsed URL: scheme=%s, host=%s\n", u.Scheme, u.Host)
 	if err := checkDestination(longURL); err != nil {
 		http.Error(w, fmt.Sprintf("invalid target URL: %v", err), http.StatusBadRequest)
 		return
@@ -61,7 +67,7 @@ func (s *server) handlerShortenLink(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to shorten URL", http.StatusInternalServerError)
 		return
 	}
-	fmt.Printf("Generated short code: %s for URL: %s\n", shortCode, longURL)
+	log.Printf("Generated short code: %s for URL: %s\n", shortCode, longURL)
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
 	io.WriteString(w, shortCode)
@@ -73,7 +79,7 @@ func (s *server) handlerRedirect(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, store.ErrNotFound) {
 			http.Error(w, "not found", http.StatusNotFound)
 		} else {
-			fmt.Printf("failed to lookup URL: %v\n", err)
+			log.Printf("failed to lookup URL: %v\n", err)
 			http.Error(w, "internal server error", http.StatusInternalServerError)
 		}
 		return
@@ -94,7 +100,7 @@ func (s *server) handlerRedirect(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerListURLs(w http.ResponseWriter, r *http.Request) {
 	codes, err := s.store.List(r.Context())
 	if err != nil {
-		fmt.Printf("failed to list URLs: %v\n", err)
+		log.Printf("failed to list URLs: %v\n", err)
 		http.Error(w, "failed to list URLs", http.StatusInternalServerError)
 		return
 	}
