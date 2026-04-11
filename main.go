@@ -16,6 +16,7 @@ import (
 )
 
 // var logger = log.New(os.Stderr, "DEBUG: ", log.LstdFlags)
+type closeFunc func() error
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -29,26 +30,44 @@ func main() {
 	os.Exit(status)
 }
 
-func initializeLogger(logFile string) (*log.Logger, error) {
+func initializeLogger(logFile string) (*log.Logger, closeFunc, error) {
 	if logFile != "" {
 		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o755)
 		if err != nil {
-			return nil, fmt.Errorf("failed to open log file: %w", err)
+			return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 		}
 		bufLog := bufio.NewWriterSize(f, 8192)
 		multiLogger := io.MultiWriter(os.Stderr, bufLog)
 
-		return log.New(multiLogger, "", log.LstdFlags), nil
+		close := func() error {
+			if err := bufLog.Flush(); err != nil {
+				return err
+			}
+			if err := f.Close(); err != nil {
+				return err
+			}
+			return nil
+		}
+
+		return log.New(multiLogger, "", log.LstdFlags), close, nil
 	}
-	return log.New(os.Stderr, "", log.LstdFlags), nil
+	close := func() error {
+		return nil
+	}
+	return log.New(os.Stderr, "", log.LstdFlags), close, nil
 }
 
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) int {
-	logger, err := initializeLogger(os.Getenv("LINKO_LOG_FILE"))
+	logger, closeLogger, err := initializeLogger(os.Getenv("LINKO_LOG_FILE"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		return 1
 	}
+	defer func() {
+		if err := closeLogger(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to flush & close the logger: %w\n", err)
+		}
+	}()
 
 	st, err := store.New(dataDir, logger)
 	if err != nil {
