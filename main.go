@@ -5,7 +5,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -37,7 +36,8 @@ func initializeLogger(logFile string) (*slog.Logger, closeFunc, error) {
 			return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 		}
 		bufLog := bufio.NewWriterSize(f, 8192)
-		multiLogger := io.MultiWriter(os.Stderr, bufLog)
+		infoLogger := slog.NewTextHandler(bufLog, &slog.HandlerOptions{Level: slog.LevelInfo})
+		debugLogger := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
 
 		close := func() error {
 			if err := bufLog.Flush(); err != nil {
@@ -50,7 +50,7 @@ func initializeLogger(logFile string) (*slog.Logger, closeFunc, error) {
 		}
 
 		// return slog.New(multiLogger, "", log.LstdFlags), close, nil
-		return slog.New(slog.NewTextHandler(multiLogger, nil)), close, nil
+		return slog.New(slog.NewMultiHandler(infoLogger, debugLogger)), close, nil
 	}
 	close := func() error {
 		return nil
@@ -73,7 +73,7 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 
 	st, err := store.New(dataDir, logger)
 	if err != nil {
-		logger.Info(fmt.Sprintf("failed to create store: %v", err))
+		logger.Debug(fmt.Sprintf("failed to create store: %v", err))
 		return 1
 	}
 
@@ -88,11 +88,11 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 	defer cancel()
 
 	if err := s.shutdown(shutdownCtx); err != nil {
-		logger.Info(fmt.Sprintf("failed to shutdown server: %v", err))
+		logger.Error(fmt.Sprintf("failed to shutdown server: %v", err))
 		return 1
 	}
 	if serverErr != nil {
-		logger.Info(fmt.Sprintf("server error: %v", serverErr))
+		logger.Error(fmt.Sprintf("server error: %v", serverErr))
 		return 1
 	}
 	return 0
