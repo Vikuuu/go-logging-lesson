@@ -36,7 +36,7 @@ func initializeLogger(logFile string) (*slog.Logger, closeFunc, error) {
 			return nil, nil, fmt.Errorf("failed to open log file: %w", err)
 		}
 		bufLog := bufio.NewWriterSize(f, 8192)
-		infoLogger := slog.NewTextHandler(bufLog, &slog.HandlerOptions{Level: slog.LevelInfo})
+		infoLogger := slog.NewJSONHandler(bufLog, &slog.HandlerOptions{Level: slog.LevelInfo})
 		debugLogger := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
 
 		close := func() error {
