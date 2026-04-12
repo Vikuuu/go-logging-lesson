@@ -67,7 +67,7 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 	}
 	defer func() {
 		if err := closeLogger(); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to flush & close the logger: %w\n", err)
+			fmt.Fprintf(os.Stderr, "failed to flush & close the logger: %v\n", err)
 		}
 	}()
 
