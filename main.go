@@ -29,36 +29,6 @@ func main() {
 	os.Exit(status)
 }
 
-func initializeLogger(logFile string) (*slog.Logger, closeFunc, error) {
-	if logFile != "" {
-		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o755)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to open log file: %w", err)
-		}
-		bufLog := bufio.NewWriterSize(f, 8192)
-		infoLogger := slog.NewJSONHandler(bufLog, &slog.HandlerOptions{Level: slog.LevelInfo})
-		debugLogger := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
-
-		close := func() error {
-			if err := bufLog.Flush(); err != nil {
-				return err
-			}
-			if err := f.Close(); err != nil {
-				return err
-			}
-			return nil
-		}
-
-		// return slog.New(multiLogger, "", log.LstdFlags), close, nil
-		return slog.New(slog.NewMultiHandler(infoLogger, debugLogger)), close, nil
-	}
-	close := func() error {
-		return nil
-	}
-	// return log.New(os.Stderr, "", log.LstdFlags), close, nil
-	return slog.New(slog.NewTextHandler(os.Stderr, nil)), close, nil
-}
-
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir string) int {
 	logger, closeLogger, err := initializeLogger(os.Getenv("LINKO_LOG_FILE"))
 	if err != nil {
@@ -96,4 +66,53 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int, dataDir s
 		return 1
 	}
 	return 0
+}
+
+func initializeLogger(logFile string) (*slog.Logger, closeFunc, error) {
+	if logFile != "" {
+		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o755)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to open log file: %w", err)
+		}
+		bufLog := bufio.NewWriterSize(f, 8192)
+		infoLogger := slog.NewJSONHandler(
+			bufLog,
+			&slog.HandlerOptions{Level: slog.LevelInfo, ReplaceAttr: replaceAttr},
+		)
+		debugLogger := slog.NewTextHandler(
+			os.Stderr,
+			&slog.HandlerOptions{Level: slog.LevelDebug, ReplaceAttr: replaceAttr},
+		)
+
+		close := func() error {
+			if err := bufLog.Flush(); err != nil {
+				return err
+			}
+			if err := f.Close(); err != nil {
+				return err
+			}
+			return nil
+		}
+
+		// return slog.New(multiLogger, "", log.LstdFlags), close, nil
+		return slog.New(slog.NewMultiHandler(infoLogger, debugLogger)), close, nil
+	}
+	close := func() error {
+		return nil
+	}
+	// return log.New(os.Stderr, "", log.LstdFlags), close, nil
+	return slog.New(slog.NewTextHandler(os.Stderr,
+			&slog.HandlerOptions{Level: slog.LevelDebug, ReplaceAttr: replaceAttr})),
+		close, nil
+}
+
+func replaceAttr(groups []string, a slog.Attr) slog.Attr {
+	if a.Key == "error" {
+		err, ok := a.Value.Any().(error)
+		if !ok {
+			return a
+		}
+		return slog.String("error", fmt.Sprintf("%+v", err))
+	}
+	return a
 }
