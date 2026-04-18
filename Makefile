@@ -4,4 +4,4 @@ build:
 	  -o linko
 
 run: build
-	LINKO_LOG_FILE=linko.access.log ./linko
+	LINKO_LOG_FILE=linko.access.log ENV=development ./linko
